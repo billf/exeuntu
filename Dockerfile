@@ -254,6 +254,10 @@ WORKDIR /home/exedev
 
 # Update PATH in .bashrc to include .local/bin and set XDG_RUNTIME_DIR for systemd user services
 # XDG paths are not autopopulated despite the presense of libpam-systemd. Manually add them here.
+# NOTE: on the exe.dev platform, SSH bypasses this VM's PAM stack entirely,
+# so pam_env/pam_exec (including /etc/environment) are inert there and are
+# kept only for stock sshd elsewhere. Load-bearing PATH must come from
+# /usr/local/bin links or the managed shell profile below -- never from PAM.
 RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/exedev/.bashrc && \
     echo 'export XDG_RUNTIME_DIR="/run/user/$(id -u)"' >> /home/exedev/.bashrc && \
     echo 'export XDG_RUNTIME_DIR="/run/user/$(id -u)"' >> /home/exedev/.profile
