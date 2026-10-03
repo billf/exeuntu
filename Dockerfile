@@ -409,3 +409,36 @@ EXPOSE 8000 9999
 LABEL "exe.dev/login-user"="exedev"
 LABEL "exe.dev/install-shelley"="true"
 CMD ["/usr/local/bin/init"]
+
+# ---------------------------------------------------------------------------
+# Optional Nix stage (appended last so the default image above is unchanged).
+# Opt in with `--target nix-base`, or COPY --from into a derived image.
+# Determinate Nix, pinned by version and checksum. Not `--init none`
+# (root-only Nix) and not `--prefer-upstream-nix` (unsupported).
+FROM ubuntu:24.04 AS nix-base
+
+ARG NIX_INSTALLER_VERSION=v3.22.5
+ARG NIX_INSTALLER_SHA256=9432d40ec1d0d4ebb6284848cc389bdb1bbf7aeb5c1cea11e7efc9daf0a1ec82
+# Space-separated nixpkgs attribute names for the default profile.
+ARG NIX_BASE_PACKAGES="bash cacert coreutils curl git"
+ARG NIXPKGS_REV=nixos-unstable
+
+USER root
+RUN set -eu; \
+    curl -sSfL -o /tmp/nix-installer \
+      "https://github.com/DeterminateSystems/nix-installer/releases/download/${NIX_INSTALLER_VERSION}/nix-installer-x86_64-linux"; \
+    echo "${NIX_INSTALLER_SHA256}  /tmp/nix-installer" | sha256sum -c -; \
+    chmod +x /tmp/nix-installer; \
+    /tmp/nix-installer install linux --no-start-daemon --no-confirm; \
+    rm -f /tmp/nix-installer
+
+# Base set into the default profile (not a user profile) so later
+# home-manager activations cannot collide with it.
+RUN set -eu; \
+    refs=""; \
+    for p in ${NIX_BASE_PACKAGES}; do refs="${refs} github:NixOS/nixpkgs/${NIXPKGS_REV}#${p}"; done; \
+    nix --extra-experimental-features "nix-command flakes" \
+        --option sandbox false --option build-users-group "" \
+        profile install --profile /nix/var/nix/profiles/default ${refs}
+
+ENV PATH="${PATH}:/nix/var/nix/profiles/default/bin"
